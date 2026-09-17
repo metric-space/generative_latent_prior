@@ -5,6 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "glp"
 version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "accelerate==1.12.0",
+    "baukit",
+    "datasets==4.4.1",
+    "diffusers==0.36.0",
+    "einops==0.8.1",
+    "ipykernel==7.1.0",
+    "ipython==9.8.0",
+    "matplotlib==3.10.8",
+    "nnsight==0.5.0",
+    "numpy==1.26.4",
+    "omegaconf==2.3.0",
+    "openai==2.15.0",
+    "pandas==2.3.3",
+    "peft==0.18.0",
+    "pillow==12.0.0",
+    "sae-lens==6.34.2",
+    "safetensors==0.7.0",
+    "scikit-learn==1.8.0",
+    "scipy==1.16.3",
+    "tokenizers==0.21.4",
+    "torch==2.7.0",
+    "wandb==0.23.1",
+]
 
 [tool.setuptools]
 packages = ["glp"]
+
+[tool.uv.sources]
+baukit = { git = "https://github.com/davidbau/baukit" }

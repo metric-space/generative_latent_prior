@@ -13,11 +13,7 @@ We want everyone to have a chance to try our models out, even in this economy. A
 ## Setup
 This code was tested with Python 3.11. To set up the environment, please run:
 ```
-conda env create -f environment.yaml
-conda activate glp
-pip install vllm==0.9.2 
-pip install transformers==4.47.0
-pip install -e .
+uv sync --locked # remove --locked if necessary
 ```
 You'll need to do the installation in the exact order above, and ignore any pip warnings. We used this exact setup, which was the only way we could get vllm/nnsight/transformers to work together.
 
