@@ -1,0 +1,50 @@
+# python glp_eval.py config=configs/eval_sentiment.yaml
+
+# Runtime and independently selectable pipeline stages.
+device: cuda:0
+stages:
+  steer: true
+  judge: true          # requires OPENAI_API_KEY
+  grade: true          # SST-5 classifier score and conditional NLL
+  summarize: true      # writes summary.csv for each selected run
+  plot_concept_fluency: true  # compares DiffMean with every selected GLP
+  plot_tradeoffs: false
+  plot_scaling: false
+
+# Base language model and GLP checkpoints. Entries may be local directories or
+# Hugging Face Hub repo IDs.
+model_name: meta-llama/Llama-3.2-1B
+weights_folders:
+  - generative-latent-prior/glp-llama1b-d3
+ckpt_names:
+  - final
+
+# Evaluation data and outputs. These paths assume execution from the repo root.
+sst5_train: integrations/sentiment/cached_inputs/sst5_train.csv
+sst5_test: integrations/sentiment/cached_inputs/sst5_test.csv
+prefix_file: integrations/sentiment/cached_inputs/openwebtext_neutral_100_prefixes.csv
+save_root: runs/sentiment
+
+# Steering sweep.
+tasks:
+  - positive_sentiment
+  - negative_sentiment
+methods:
+  - diffmean
+  - glp
+alphas: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0]
+act_norm: 5.2087       # set null to use the estimate from GLP statistics
+max_new_tokens: 20
+temperature: 0.0
+batch_size: 100
+seed: 42
+
+# GLP noise-and-denoise post-processing.
+u: 0.5
+num_timesteps: 20
+dtype: bfloat16
+
+# LLM judge.
+judge_model: gpt-4o-mini
+max_concurrency: 100
+overwrite_judge: false

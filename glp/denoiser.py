@@ -4,7 +4,6 @@ from huggingface_hub import snapshot_download
 from itertools import chain
 import math
 from omegaconf import OmegaConf
-import os
 from pathlib import Path
 from safetensors.torch import load_file, save_file
 import torch
@@ -290,14 +289,22 @@ class GLP(nn.Module):
         )
 
 def load_glp(weights_folder, device="cuda:0", checkpoint="final"):
-    if not os.path.exists(f"{weights_folder}/{checkpoint}"):
+    weights_path = Path(weights_folder)
+    checkpoint_file = weights_path / f"{checkpoint}.safetensors"
+    if weights_path.is_dir() and not checkpoint_file.is_file():
+        raise FileNotFoundError(f"Checkpoint does not exist: {checkpoint_file}")
+    if not weights_path.is_dir():
         # speed up downloading the main checkpoint
         ignore_patterns = ["checkpoints/*"] if checkpoint == "final" else None
         local_dir = snapshot_download(
             repo_id=weights_folder,
             ignore_patterns=ignore_patterns
         )
-        weights_folder = local_dir
+        weights_path = Path(local_dir)
+        checkpoint_file = weights_path / f"{checkpoint}.safetensors"
+    if not checkpoint_file.is_file():
+        raise FileNotFoundError(f"Checkpoint does not exist: {checkpoint_file}")
+    weights_folder = str(weights_path)
     config = OmegaConf.load(f"{weights_folder}/config.yaml")
     config.rep_statistic = f"{weights_folder}/rep_statistics.pt"
     OmegaConf.resolve(config)
