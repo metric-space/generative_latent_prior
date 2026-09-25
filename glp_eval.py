@@ -146,6 +146,19 @@ def result_files(save_folders: list[str]) -> list[str]:
     )
 
 
+def padded_score_limits(values, padding_fraction: float = 0.08, minimum_span: float = 0.2):
+    """Return tight, padded limits for judge scores whose valid range is 0--2."""
+
+    values = np.asarray(values, dtype=float)
+    data_min = float(np.nanmin(values))
+    data_max = float(np.nanmax(values))
+    span = max(data_max - data_min, minimum_span)
+    center = (data_min + data_max) / 2
+    lower = max(0.0, center - span / 2 - span * padding_fraction)
+    upper = min(2.0, center + span / 2 + span * padding_fraction)
+    return lower, upper
+
+
 def plot_concept_fluency_comparison(runs, save_root: str) -> None:
     """Plot concept against fluency, with steering alpha tracing each curve.
 
@@ -243,8 +256,8 @@ def plot_concept_fluency_comparison(runs, save_root: str) -> None:
             ax.set_title(task.replace("_", " ").title())
             ax.set_xlabel("Mean fluency score")
             ax.set_ylabel("Mean concept score")
-            ax.set_xlim(-0.05, 2.05)
-            ax.set_ylim(-0.05, 2.05)
+            ax.set_xlim(padded_score_limits(task_rows["fluency_llm_score"]))
+            ax.set_ylim(padded_score_limits(task_rows["concept_llm_score"]))
             ax.grid(True, linestyle="--", alpha=0.35)
             ax.legend(fontsize=9)
 
