@@ -78,12 +78,17 @@ def sample_on_manifold(
     latents, 
     num_timesteps=20, 
     start_timestep=None,
+    step_callback=None,
     **kwargs
 ):
     """
     Post-process activations into their on-manifold counterpart.
     See the `sample` function above for recommendations on `num_timesteps`.
     This is essentially the activation-space analogue of SDEdit (Meng et. al., 2022).
+
+    If supplied, ``step_callback`` is called after every applied denoising
+    step as ``step_callback(step_index, timestep, latents)``. Timesteps that
+    are skipped because they precede ``start_timestep`` do not trigger it.
     """
     start_latents = latents.clone()
     model.scheduler.set_timesteps(num_timesteps)
@@ -101,4 +106,6 @@ def sample_on_manifold(
             **kwargs
         )
         latents = model.scheduler.step(noise_pred, timesteps, latents, return_dict=False)[0]
+        if step_callback is not None:
+            step_callback(i, timestep, latents)
     return latents

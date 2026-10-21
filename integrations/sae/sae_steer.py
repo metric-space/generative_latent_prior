@@ -42,6 +42,7 @@ class RunConfig:
     # GLP post-processing
     u: float = 0.5
     num_timesteps: int = 20
+    record_direction_trace: bool = False
     dtype: str = "bfloat16"
     # judge
     judge_model: str = "gpt-4o-mini"
@@ -95,7 +96,12 @@ def sae_steering(config, device="cuda:0"):
     prompt_pool = pd.read_csv(config.prompt_file)["prompt"]
     methods = {"sae": None}
     if glp is not None:
-        methods["glp"] = postprocess_on_manifold_wrapper(glp, u=config.u, num_timesteps=config.num_timesteps)
+        methods["glp"] = postprocess_on_manifold_wrapper(
+            glp,
+            u=config.u,
+            num_timesteps=config.num_timesteps,
+            record_direction_trace=config.record_direction_trace,
+        )
 
     alphas = torch.tensor(list(config.alphas))
     steer_kwargs = dict(layer=layer, act_norm=act_norm, batch_size=config.batch_size, max_new_tokens=config.max_new_tokens, temperature=config.temperature, seed=config.seed)
