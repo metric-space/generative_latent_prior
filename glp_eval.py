@@ -79,6 +79,7 @@ class EvalConfig:
     # GLP post-processing
     u: float = 0.5
     num_timesteps: int = 20
+    record_direction_trace: bool = False
     dtype: str = "bfloat16"
 
     # LLM judge
