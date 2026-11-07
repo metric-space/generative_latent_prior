@@ -42,9 +42,14 @@ seed: 42
 # GLP noise-and-denoise post-processing.
 u: 0.5
 num_timesteps: 20
+# Set to [0, 1, ..., 10] for the u=0.5 timestep-cutoff experiment. Each
+# generated response uses one fixed cutoff for every token.
+inference_step_cutoffs: null
+record_direction_trace: false
 dtype: bfloat16
 
 # LLM judge.
 judge_model: gpt-4o-mini
 max_concurrency: 100
 overwrite_judge: false
+judge_fine_grained: false  # also write parallel 0-100 concept/fluency scores

@@ -20,12 +20,14 @@ class OnManifoldPostprocessor:
         num_timesteps=20,
         layer_idx=None,
         record_direction_trace=False,
+        max_denoising_steps=None,
     ):
         self.model = model
         self.u = u
         self.num_timesteps = num_timesteps
         self.layer_idx = layer_idx
         self.record_direction_trace = record_direction_trace
+        self.max_denoising_steps = max_denoising_steps
         self.direction_traces = []
 
     def clear_direction_traces(self):
@@ -91,12 +93,22 @@ class OnManifoldPostprocessor:
                 cumulative_norm = cumulative_delta.norm(dim=-1)
                 step_projection = (step_delta * unit_direction).sum(dim=-1)
                 cumulative_projection = (cumulative_delta * unit_direction).sum(dim=-1)
+                step_orthogonal_norm = torch.sqrt(
+                    (step_norm.square() - step_projection.square()).clamp_min(0)
+                )
+                cumulative_orthogonal_norm = torch.sqrt(
+                    (cumulative_norm.square() - cumulative_projection.square()).clamp_min(0)
+                )
                 step_records.append({
                     "step": len(step_records),
                     "scheduler_step": int(step_index),
                     "timestep": float(timestep.detach().float().item()),
                     "step_projection": step_projection.mean(dim=-1).detach().cpu().tolist(),
                     "cumulative_projection": cumulative_projection.mean(dim=-1).detach().cpu().tolist(),
+                    "step_norm": step_norm.mean(dim=-1).detach().cpu().tolist(),
+                    "cumulative_norm": cumulative_norm.mean(dim=-1).detach().cpu().tolist(),
+                    "step_orthogonal_norm": step_orthogonal_norm.mean(dim=-1).detach().cpu().tolist(),
+                    "cumulative_orthogonal_norm": cumulative_orthogonal_norm.mean(dim=-1).detach().cpu().tolist(),
                     "step_cosine": (
                         step_projection / step_norm.clamp_min(1e-12)
                     ).mean(dim=-1).detach().cpu().tolist(),
@@ -119,6 +131,7 @@ class OnManifoldPostprocessor:
             num_timesteps=self.num_timesteps,
             layer_idx=self.layer_idx,
             step_callback=trace_step,
+            max_denoising_steps=self.max_denoising_steps,
         )
         if self.record_direction_trace:
             self.direction_traces.append(step_records)
@@ -139,6 +152,7 @@ def postprocess_on_manifold_wrapper(
     num_timesteps=20,
     layer_idx=None,
     record_direction_trace=False,
+    max_denoising_steps=None,
 ):
     """Compatibility factory returning a callable GLP postprocessor."""
     return OnManifoldPostprocessor(
@@ -147,6 +161,7 @@ def postprocess_on_manifold_wrapper(
         num_timesteps=num_timesteps,
         layer_idx=layer_idx,
         record_direction_trace=record_direction_trace,
+        max_denoising_steps=max_denoising_steps,
     )
 
 # =========================
@@ -231,6 +246,22 @@ def steer_sweep(hf_model, hf_tokenizer, prefixes, alphas, w, layer, act_norm, po
                         ],
                     })
                 row["direction_trace_json"] = json.dumps(per_token)
+                final_steps = [
+                    token["diffusion_steps"][-1]
+                    for token in per_token
+                    if token["diffusion_steps"]
+                ]
+                for metric in (
+                    "cumulative_projection",
+                    "cumulative_norm",
+                    "cumulative_orthogonal_norm",
+                    "cumulative_cosine",
+                    "steering_retention",
+                ):
+                    row[f"activation_{metric}_mean"] = (
+                        sum(step[metric] for step in final_steps) / len(final_steps)
+                        if final_steps else None
+                    )
         rows += batch_rows
     return pd.DataFrame(rows)
 

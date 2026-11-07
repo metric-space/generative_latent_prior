@@ -80,12 +80,14 @@ class EvalConfig:
     u: float = 0.5
     num_timesteps: int = 20
     record_direction_trace: bool = False
+    inference_step_cutoffs: Optional[list[int]] = None
     dtype: str = "bfloat16"
 
     # LLM judge
     judge_model: str = "gpt-4o-mini"
     max_concurrency: int = 100
     overwrite_judge: bool = False
+    judge_fine_grained: bool = False
 
 
 def load_config():
@@ -252,7 +254,7 @@ def plot_concept_fluency_comparison(runs, save_root: str) -> None:
                         textcoords="offset points",
                         fontsize=8,
                         color=color,
-                    )
+                     )
 
             ax.set_title(task.replace("_", " ").title())
             ax.set_xlabel("Mean fluency score")
@@ -313,6 +315,7 @@ def main() -> None:
             model=config.judge_model,
             max_concurrency=config.max_concurrency,
             overwrite=config.overwrite_judge,
+            fine_grained=config.judge_fine_grained,
         )
 
     if config.stages.grade:

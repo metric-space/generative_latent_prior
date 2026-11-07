@@ -79,6 +79,7 @@ def sample_on_manifold(
     num_timesteps=20, 
     start_timestep=None,
     step_callback=None,
+    max_denoising_steps=None,
     **kwargs
 ):
     """
@@ -92,6 +93,7 @@ def sample_on_manifold(
     """
     start_latents = latents.clone()
     model.scheduler.set_timesteps(num_timesteps)
+    applied_steps = 0
     for i, timestep in tqdm(enumerate(model.scheduler.timesteps)):
         if start_timestep is not None and torch.is_tensor(start_timestep):
             # inject original latents until start_timestep
@@ -99,6 +101,8 @@ def sample_on_manifold(
             latents[timestep_mask] = start_latents[timestep_mask]
         elif start_timestep is not None and timestep > start_timestep:
             continue
+        if max_denoising_steps is not None and applied_steps >= max_denoising_steps:
+            break
         timesteps = timestep[None, ...]
         noise_pred = model.denoiser(
             latents=latents,
@@ -108,4 +112,5 @@ def sample_on_manifold(
         latents = model.scheduler.step(noise_pred, timesteps, latents, return_dict=False)[0]
         if step_callback is not None:
             step_callback(i, timestep, latents)
+        applied_steps += 1
     return latents
