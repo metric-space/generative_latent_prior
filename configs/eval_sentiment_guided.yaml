@@ -25,7 +25,7 @@ ckpt_names:
 sst5_train: integrations/sentiment/cached_inputs/sst5_train.csv
 sst5_test: integrations/sentiment/cached_inputs/sst5_test.csv
 prefix_file: integrations/sentiment/cached_inputs/openwebtext_neutral_100_prefixes.csv
-save_root: runs/sentiment_guided_gamma_02
+save_root: runs/sentiment_guidance_sweep
 
 # Steering sweep.
 tasks:
@@ -44,7 +44,8 @@ seed: 42
 # GLP noise-and-denoise post-processing.
 u: 0.5
 num_timesteps: 20
-guidance_gamma: 0.2
+guidance_gamma: 0.2  # used only when guidance_gammas is null
+guidance_gammas: [0.0, 0.1, 0.2, 0.5]
 
 # Disable activation tracing and timestep-cutoff experiments for this run.
 record_direction_trace: false

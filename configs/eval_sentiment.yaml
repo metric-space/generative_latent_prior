@@ -49,6 +49,9 @@ record_direction_trace: false
 # Projection-preserving velocity guidance. Zero exactly preserves the original
 # GLP behavior; try 0.1 or 0.2 to guide each reverse step.
 guidance_gamma: 0.0
+# Optional sweep. When set, this replaces the single GLP result with one result
+# and concept-fluency curve per gamma. Do not combine with inference cutoffs.
+guidance_gammas: null
 dtype: bfloat16
 
 # LLM judge.

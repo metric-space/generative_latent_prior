@@ -41,6 +41,7 @@ class RunConfig:
     record_direction_trace: bool = False
     inference_step_cutoffs: list[int] | None = None
     guidance_gamma: float = 0.0
+    guidance_gammas: list[float] | None = None
     dtype: str = "bfloat16"
     # judge
     judge_model: str = "gpt-4o-mini"
@@ -58,6 +59,10 @@ def get_diffmean_dir(X_train, y_train, l2_normalize=True, eps=1e-8):
     if l2_normalize:
         w = w / (torch.linalg.norm(w) + eps)
     return w
+
+def gamma_method_name(gamma):
+    """Return a stable, filesystem-safe method name for a guidance strength."""
+    return f"glp_gamma_{float(gamma):g}".replace(".", "p")
 
 def sentiment_steering(config, weights_folder, ckpt_name, save_folder, device="cuda:0"):
     # GLP; its tracedict_config records the layer it was trained on (e.g. model.layers.7, output)
@@ -99,7 +104,26 @@ def sentiment_steering(config, weights_folder, ckpt_name, save_folder, device="c
     methods = {m: None for m in config.methods}
     if "glp" in methods:
         assert glp is not None, "weights_folder is required for the glp method"
-        if config.inference_step_cutoffs:
+        if config.inference_step_cutoffs and config.guidance_gammas:
+            raise ValueError(
+                "Set either inference_step_cutoffs or guidance_gammas, not both"
+            )
+        if config.guidance_gammas:
+            del methods["glp"]
+            gammas = [float(gamma) for gamma in config.guidance_gammas]
+            if any(gamma < 0 for gamma in gammas):
+                raise ValueError("guidance_gammas must be non-negative")
+            if len(set(gammas)) != len(gammas):
+                raise ValueError("guidance_gammas must not contain duplicates")
+            for gamma in gammas:
+                methods[gamma_method_name(gamma)] = postprocess_on_manifold_wrapper(
+                    glp,
+                    u=config.u,
+                    num_timesteps=config.num_timesteps,
+                    record_direction_trace=config.record_direction_trace,
+                    guidance_gamma=gamma,
+                )
+        elif config.inference_step_cutoffs:
             del methods["glp"]
             for cutoff in config.inference_step_cutoffs:
                 if cutoff < 0:
@@ -241,6 +265,9 @@ def load_summary(save_folder):
     summary["inference_steps"] = summary["method"].str.extract(
         r"^glp_step_(\d+)$", expand=False
     ).astype("Int64")
+    summary["guidance_gamma"] = summary["method"].str.extract(
+        r"^glp_gamma_(.+)$", expand=False
+    ).str.replace("p", ".", regex=False).astype("Float64")
     summary.to_csv(f"{save_folder}/summary.csv", index=False)
     return df, summary
 

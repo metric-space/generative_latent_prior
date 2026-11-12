@@ -82,6 +82,7 @@ class EvalConfig:
     record_direction_trace: bool = False
     inference_step_cutoffs: Optional[list[int]] = None
     guidance_gamma: float = 0.0
+    guidance_gammas: Optional[list[float]] = None
     dtype: str = "bfloat16"
 
     # LLM judge
@@ -183,7 +184,7 @@ def plot_concept_fluency_comparison(runs, save_root: str) -> None:
             path = Path(file_name)
             task = path.parent.name
             method = path.stem
-            if method not in {"diffmean", "glp"}:
+            if method not in {"diffmean", "glp"} and not method.startswith("glp_gamma_"):
                 continue
             if method == "diffmean" and task in diffmean_tasks:
                 continue
@@ -199,6 +200,9 @@ def plot_concept_fluency_comparison(runs, save_root: str) -> None:
             if method == "diffmean":
                 curve = "DiffMean"
                 diffmean_tasks.add(task)
+            elif method.startswith("glp_gamma_"):
+                gamma = method.removeprefix("glp_gamma_").replace("p", ".")
+                curve = f"GLP γ={gamma}: {model_label}"
             else:
                 curve = f"GLP: {model_label}"
             frames.append(
