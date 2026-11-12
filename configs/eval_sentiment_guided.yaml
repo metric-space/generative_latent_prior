@@ -1,0 +1,59 @@
+# Guided GLP sentiment evaluation.
+#
+# Run from the repository root:
+#   python glp_eval.py config=configs/eval_sentiment_guided.yaml
+
+device: cuda:0
+
+stages:
+  steer: true
+  judge: true
+  grade: false
+  summarize: true
+  plot_concept_fluency: true
+  plot_tradeoffs: false
+  plot_scaling: false
+
+# Base language model and GLP checkpoint.
+model_name: meta-llama/Llama-3.2-1B
+weights_folders:
+  - generative-latent-prior/glp-llama1b-d3
+ckpt_names:
+  - final
+
+# Evaluation data and outputs.
+sst5_train: integrations/sentiment/cached_inputs/sst5_train.csv
+sst5_test: integrations/sentiment/cached_inputs/sst5_test.csv
+prefix_file: integrations/sentiment/cached_inputs/openwebtext_neutral_100_prefixes.csv
+save_root: runs/sentiment_guided_gamma_02
+
+# Steering sweep.
+tasks:
+  - positive_sentiment
+  - negative_sentiment
+methods:
+  - diffmean
+  - glp
+alphas: [0.4, 0.8, 1.2, 1.6, 2.0]
+act_norm: 5.2087
+max_new_tokens: 20
+temperature: 0.0
+batch_size: 100
+seed: 42
+
+# GLP noise-and-denoise post-processing.
+u: 0.5
+num_timesteps: 20
+guidance_gamma: 0.2
+
+# Disable activation tracing and timestep-cutoff experiments for this run.
+record_direction_trace: false
+inference_step_cutoffs: null
+
+dtype: bfloat16
+
+# LLM judge. The existing concept-fluency plot uses the established 0-2 scores.
+judge_model: gpt-4o-mini
+max_concurrency: 100
+overwrite_judge: false
+judge_fine_grained: false

@@ -38,11 +38,15 @@ class RunConfig:
     # GLP post-processing
     u: float = 0.5
     num_timesteps: int = 20
+    record_direction_trace: bool = False
+    inference_step_cutoffs: list[int] | None = None
+    guidance_gamma: float = 0.0
     dtype: str = "bfloat16"
     # judge
     judge_model: str = "gpt-4o-mini"
     max_concurrency: int = 100
     overwrite_judge: bool = False
+    judge_fine_grained: bool = False
     # plots
     plot_tradeoffs: bool = False  # per-size sentiment score vs NLL curves
 
@@ -56,10 +60,6 @@ def get_diffmean_dir(X_train, y_train, l2_normalize=True, eps=1e-8):
     return w
 
 def sentiment_steering(config, weights_folder, ckpt_name, save_folder, device="cuda:0"):
-    if all(os.path.exists(f"{save_folder}/{t}/{m}.parquet") for t in config.tasks for m in config.methods):
-        print(f"Skipping {save_folder}")
-        return
-
     # GLP; its tracedict_config records the layer it was trained on (e.g. model.layers.7, output)
     # intermediate checkpoints live under checkpoints/ in the released repos
     checkpoint = ckpt_name if ckpt_name == "final" else f"checkpoints/{ckpt_name}"
@@ -99,7 +99,28 @@ def sentiment_steering(config, weights_folder, ckpt_name, save_folder, device="c
     methods = {m: None for m in config.methods}
     if "glp" in methods:
         assert glp is not None, "weights_folder is required for the glp method"
-        methods["glp"] = postprocess_on_manifold_wrapper(glp, u=config.u, num_timesteps=config.num_timesteps)
+        if config.inference_step_cutoffs:
+            del methods["glp"]
+            for cutoff in config.inference_step_cutoffs:
+                if cutoff < 0:
+                    raise ValueError("inference_step_cutoffs must be non-negative")
+                name = f"glp_step_{cutoff:02d}"
+                methods[name] = None if cutoff == 0 else postprocess_on_manifold_wrapper(
+                    glp,
+                    u=config.u,
+                    num_timesteps=config.num_timesteps,
+                    record_direction_trace=True,
+                    max_denoising_steps=cutoff,
+                    guidance_gamma=config.guidance_gamma,
+                )
+        else:
+            methods["glp"] = postprocess_on_manifold_wrapper(
+                glp,
+                u=config.u,
+                num_timesteps=config.num_timesteps,
+                record_direction_trace=config.record_direction_trace,
+                guidance_gamma=config.guidance_gamma,
+            )
     steer_kwargs = dict(layer=layer, act_norm=act_norm, batch_size=config.batch_size, max_new_tokens=config.max_new_tokens, temperature=config.temperature, seed=config.seed)
     for task in config.tasks:
         sign = -1 if "negative" in task else 1
@@ -203,7 +224,23 @@ STYLES = {
 def load_summary(save_folder):
     files = sorted(glob.glob(f"{save_folder}/*/*.parquet"))
     df = pd.concat([pd.read_parquet(f).assign(task=f.split("/")[-2], method=os.path.basename(f).split(".")[0]) for f in files])
-    summary = df.groupby(["task", "method", "alpha"])[["fluency_llm_score", "concept_llm_score"]].mean().reset_index()
+    metric_columns = [
+        column for column in (
+            "fluency_llm_score",
+            "concept_llm_score",
+            "fluency_llm_score_100",
+            "concept_llm_score_100",
+            "activation_cumulative_projection_mean",
+            "activation_cumulative_norm_mean",
+            "activation_cumulative_orthogonal_norm_mean",
+            "activation_cumulative_cosine_mean",
+            "activation_steering_retention_mean",
+        ) if column in df.columns
+    ]
+    summary = df.groupby(["task", "method", "alpha"])[metric_columns].mean().reset_index()
+    summary["inference_steps"] = summary["method"].str.extract(
+        r"^glp_step_(\d+)$", expand=False
+    ).astype("Int64")
     summary.to_csv(f"{save_folder}/summary.csv", index=False)
     return df, summary
 
@@ -315,7 +352,7 @@ def main(device="cuda:0"):
             save_folders.append((weights_folder, ckpt_name, save_folder))
     for weights_folder, ckpt_name, save_folder in save_folders:
         sentiment_steering(config, weights_folder, ckpt_name, save_folder, device=device)
-    judge_parquets(sorted(glob.glob(f"{config.save_root}/**/*.parquet", recursive=True)), model=config.judge_model, max_concurrency=config.max_concurrency, overwrite=config.overwrite_judge)
+    judge_parquets(sorted(glob.glob(f"{config.save_root}/**/*.parquet", recursive=True)), model=config.judge_model, max_concurrency=config.max_concurrency, overwrite=config.overwrite_judge, fine_grained=config.judge_fine_grained)
     grade_parquets(config, sorted(glob.glob(f"{config.save_root}/**/*.parquet", recursive=True)), device=device)
     if config.plot_tradeoffs:
         for _, _, save_folder in save_folders:

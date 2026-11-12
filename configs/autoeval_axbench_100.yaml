@@ -1,0 +1,18 @@
+concept: |
+  [System]
+  Evaluate how clearly the specified concept is present in the sentence fragment. Ignore grammar except where it prevents the concept from being understood. Give a continuous integer score from 0 to 100: 0 means completely absent, 50 means present only indirectly, weakly, or awkwardly, and 100 means explicit, strong, and naturally integrated. Use the full scale to distinguish small but meaningful differences. Briefly explain the score, then provide it using exactly: "Rating: [[score]]".
+
+  [Concept Start]
+  <concept>
+  [Concept End]
+
+  [Sentence Fragment Start]
+  <sentence>
+  [Sentence Fragment End]
+fluency: |
+  [System]
+  Evaluate only the fluency of the sentence fragment, ignoring completeness, relevance, and factuality. Give a continuous integer score from 0 to 100: 0 means incomprehensible, 50 means understandable with substantial awkwardness or errors, and 100 means completely natural and polished. Use the full scale to distinguish small but meaningful differences. Briefly explain the score, then provide it using exactly: "Rating: [[score]]".
+
+  [Sentence Fragment Start]
+  <sentence>
+  [Sentence Fragment End]

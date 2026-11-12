@@ -43,6 +43,27 @@ def fm_clean_estimate(scheduler, latents, noise_pred, timesteps):
     pred_x0 = latents - sigma * noise_pred
     return pred_x0
 
+def guided_velocity(
+    x_t,
+    t,
+    velocity,
+    edited_activation,
+    steering_vector,
+    gamma=0.2,
+):
+    """Guide reverse flow toward the edited activation's steering projection.
+
+    All tensors must use the GLP's normalized activation coordinates. The
+    minus sign accounts for reverse integration over decreasing sigma when
+    the trained velocity target is ``noise - clean_activation``.
+    """
+    del t  # reserved for timestep-dependent guidance schedules
+    direction = torch.nn.functional.normalize(steering_vector, dim=-1)
+    target = (edited_activation * direction).sum(dim=-1, keepdim=True)
+    current = (x_t * direction).sum(dim=-1, keepdim=True)
+    guidance = -gamma * (target - current) * direction
+    return velocity + guidance
+
 # ==========================
 #   Generic Sampling Code
 # ==========================
@@ -78,15 +99,23 @@ def sample_on_manifold(
     latents, 
     num_timesteps=20, 
     start_timestep=None,
+    step_callback=None,
+    max_denoising_steps=None,
+    velocity_transform=None,
     **kwargs
 ):
     """
     Post-process activations into their on-manifold counterpart.
     See the `sample` function above for recommendations on `num_timesteps`.
     This is essentially the activation-space analogue of SDEdit (Meng et. al., 2022).
+
+    If supplied, ``step_callback`` is called after every applied denoising
+    step as ``step_callback(step_index, timestep, latents)``. Timesteps that
+    are skipped because they precede ``start_timestep`` do not trigger it.
     """
     start_latents = latents.clone()
     model.scheduler.set_timesteps(num_timesteps)
+    applied_steps = 0
     for i, timestep in tqdm(enumerate(model.scheduler.timesteps)):
         if start_timestep is not None and torch.is_tensor(start_timestep):
             # inject original latents until start_timestep
@@ -94,11 +123,18 @@ def sample_on_manifold(
             latents[timestep_mask] = start_latents[timestep_mask]
         elif start_timestep is not None and timestep > start_timestep:
             continue
+        if max_denoising_steps is not None and applied_steps >= max_denoising_steps:
+            break
         timesteps = timestep[None, ...]
         noise_pred = model.denoiser(
             latents=latents,
             timesteps=timesteps.repeat(latents.shape[0], 1, 1),
             **kwargs
         )
+        if velocity_transform is not None:
+            noise_pred = velocity_transform(latents, timesteps, noise_pred)
         latents = model.scheduler.step(noise_pred, timesteps, latents, return_dict=False)[0]
+        if step_callback is not None:
+            step_callback(i, timestep, latents)
+        applied_steps += 1
     return latents
