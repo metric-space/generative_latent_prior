@@ -21,6 +21,7 @@ class OnManifoldPostprocessor:
         layer_idx=None,
         record_direction_trace=False,
         max_denoising_steps=None,
+        guidance_gamma=0.0,
     ):
         self.model = model
         self.u = u
@@ -28,7 +29,14 @@ class OnManifoldPostprocessor:
         self.layer_idx = layer_idx
         self.record_direction_trace = record_direction_trace
         self.max_denoising_steps = max_denoising_steps
+        if guidance_gamma < 0:
+            raise ValueError("guidance_gamma must be non-negative")
+        self.guidance_gamma = guidance_gamma
         self.direction_traces = []
+
+    @property
+    def uses_intervention_context(self):
+        return self.record_direction_trace or self.guidance_gamma > 0
 
     def clear_direction_traces(self):
         self.direction_traces.clear()
@@ -51,6 +59,39 @@ class OnManifoldPostprocessor:
         else:
             latents = einops.rearrange(latents, "b d -> b 1 d")
         latents = self.model.normalizer.normalize(latents, layer_idx=self.layer_idx)
+        edited_latents = latents
+
+        if self.guidance_gamma > 0:
+            if reference_acts is None or steering_vector is None:
+                raise ValueError(
+                    "Velocity guidance requires reference_acts and steering_vector"
+                )
+            normalized_reference = reference_acts
+            if has_seq_dim:
+                normalized_reference = einops.rearrange(
+                    normalized_reference, "b s d -> (b s) 1 d"
+                )
+            else:
+                normalized_reference = einops.rearrange(
+                    normalized_reference, "b d -> b 1 d"
+                )
+            normalized_reference = self.model.normalizer.normalize(
+                normalized_reference, layer_idx=self.layer_idx
+            )
+            normalized_steering = edited_latents - normalized_reference
+
+            def velocity_transform(x_t, timestep, velocity):
+                return flow_matching.guided_velocity(
+                    x_t=x_t,
+                    t=timestep,
+                    velocity=velocity,
+                    edited_activation=edited_latents,
+                    steering_vector=normalized_steering,
+                    gamma=self.guidance_gamma,
+                )
+        else:
+            velocity_transform = None
+
         noise = torch.randn_like(latents)
         noisy_latents, _, timesteps, _ = flow_matching.fm_prepare(
             self.model.scheduler,
@@ -132,6 +173,7 @@ class OnManifoldPostprocessor:
             layer_idx=self.layer_idx,
             step_callback=trace_step,
             max_denoising_steps=self.max_denoising_steps,
+            velocity_transform=velocity_transform,
         )
         if self.record_direction_trace:
             self.direction_traces.append(step_records)
@@ -153,6 +195,7 @@ def postprocess_on_manifold_wrapper(
     layer_idx=None,
     record_direction_trace=False,
     max_denoising_steps=None,
+    guidance_gamma=0.0,
 ):
     """Compatibility factory returning a callable GLP postprocessor."""
     return OnManifoldPostprocessor(
@@ -162,6 +205,7 @@ def postprocess_on_manifold_wrapper(
         layer_idx=layer_idx,
         record_direction_trace=record_direction_trace,
         max_denoising_steps=max_denoising_steps,
+        guidance_gamma=guidance_gamma,
     )
 
 # =========================
@@ -190,7 +234,7 @@ def addition_intervention(w=None, alphas=None, postprocess_fn=None):
             edited_acts = reference_acts + alphas * w
             if (
                 isinstance(postprocess_fn, OnManifoldPostprocessor)
-                and postprocess_fn.record_direction_trace
+                and postprocess_fn.uses_intervention_context
             ):
                 edited_acts = postprocess_fn(
                     edited_acts,

@@ -40,6 +40,7 @@ class RunConfig:
     num_timesteps: int = 20
     record_direction_trace: bool = False
     inference_step_cutoffs: list[int] | None = None
+    guidance_gamma: float = 0.0
     dtype: str = "bfloat16"
     # judge
     judge_model: str = "gpt-4o-mini"
@@ -110,6 +111,7 @@ def sentiment_steering(config, weights_folder, ckpt_name, save_folder, device="c
                     num_timesteps=config.num_timesteps,
                     record_direction_trace=True,
                     max_denoising_steps=cutoff,
+                    guidance_gamma=config.guidance_gamma,
                 )
         else:
             methods["glp"] = postprocess_on_manifold_wrapper(
@@ -117,6 +119,7 @@ def sentiment_steering(config, weights_folder, ckpt_name, save_folder, device="c
                 u=config.u,
                 num_timesteps=config.num_timesteps,
                 record_direction_trace=config.record_direction_trace,
+                guidance_gamma=config.guidance_gamma,
             )
     steer_kwargs = dict(layer=layer, act_norm=act_norm, batch_size=config.batch_size, max_new_tokens=config.max_new_tokens, temperature=config.temperature, seed=config.seed)
     for task in config.tasks:

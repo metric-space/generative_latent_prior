@@ -81,6 +81,7 @@ class EvalConfig:
     num_timesteps: int = 20
     record_direction_trace: bool = False
     inference_step_cutoffs: Optional[list[int]] = None
+    guidance_gamma: float = 0.0
     dtype: str = "bfloat16"
 
     # LLM judge

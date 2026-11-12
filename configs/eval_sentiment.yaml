@@ -46,6 +46,9 @@ num_timesteps: 20
 # generated response uses one fixed cutoff for every token.
 inference_step_cutoffs: null
 record_direction_trace: false
+# Projection-preserving velocity guidance. Zero exactly preserves the original
+# GLP behavior; try 0.1 or 0.2 to guide each reverse step.
+guidance_gamma: 0.0
 dtype: bfloat16
 
 # LLM judge.
